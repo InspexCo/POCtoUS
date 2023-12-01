@@ -1,0 +1,8 @@
+.env
+node_modules/
+test_asset/
+cache/*
+!cache/.gitkeep
+POC/
+package-lock.json
+.ds_store
