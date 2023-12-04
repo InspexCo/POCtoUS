@@ -1,5 +1,7 @@
 # POCtoUS
 
+[![CC BY-SA 4.0](https://img.shields.io/badge/License-CC%20BY--SA%204.0-lightgrey.svg)](http://creativecommons.org/licenses/by-sa/4.0/)
+
 POCtoUS is pronounced like 'Octopus'🐙 but in reverse. It is a script that aims to help create an environment for analyzing a transaction on the blockchain by leveraging the power of an incredible tool, [Foundry](https://github.com/foundry-rs/foundry).
 
 For now, the code looks really messy. We want to express the ideas first, then re-organize them after consider it worth doing.
