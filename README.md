@@ -83,7 +83,7 @@ POC
 
 In this version, you need to install the dependencies and execute the `main.js` file to use.
 ```bash
-git clone https://gitlab.com/inspexco/tools/poctous
+git clone https://github.com/InspexCo/POCtoUS.git
 cd poctous
 npm install .
 ```
