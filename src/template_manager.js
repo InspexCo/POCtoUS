@@ -209,8 +209,10 @@ async function generateTargetContractCode(analyzedCall, metadata, tAddress, mapp
             try{
               let gessParam = guessAbiEncodedData(calldata)[0]
               paramType = typeof gessParam.type == typeof []?gessParam.type:[gessParam.type]
-              if(paramType[0].includes('tuple'))
-              [paramType, newStruct] = generateStruct(paramType, structTracker)
+              if(paramType[0].includes('tuple')){
+                if(paramType[0].includes('tuple()')) paramType = ['bytes memory']
+                else [paramType, newStruct] = generateStruct(paramType, structTracker)
+              }
             }catch(e){
               console.error('Fail: guessing calldata type')
               paramType = ['bytes memory']
