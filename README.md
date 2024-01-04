@@ -49,6 +49,7 @@ The `-e` flag is totally optional. The default of the API endpoint will be set t
 - OP Mainnet (https://api-optimistic.etherscan.io/api)
 - BNB Smart Chain Mainnet (https://api.bscscan.com/api)
 - BNB Smart Chain Testnet (https://api-testnet.bscscan.com/api)
+- Arbitrum One (https://api.arbiscan.io/api)
 
 ## File structure
 
