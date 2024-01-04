@@ -4,6 +4,8 @@
 
 POCtoUS is pronounced like 'Octopus'🐙 but in reverse. It is a script that aims to help create an environment for analyzing a transaction on the blockchain by leveraging the power of an incredible tool, [Foundry](https://github.com/foundry-rs/foundry).
 
+The tool will create a foundry test file of a given transaction hash. The tool will try to imitate the attacker's attack contract. It also downloads and flattens the contract source code of every related address.
+
 For now, the code looks really messy. We want to express the ideas first, then re-organize them after consider it worth doing.
 
 ## Usage
