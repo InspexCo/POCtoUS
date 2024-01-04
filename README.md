@@ -53,7 +53,7 @@ The `-e` flag is totally optional. The default of the API endpoint will be set t
 
 ## File structure
 
-The scipt will create a `POC` folder that have the `forge init` setup.
+The script will create a `POC` folder that have the `forge init` setup.
 #### Sourcecode
 The script will download all verified contract the are interacted on the transaction. The downloaded sourcecode will be flattened and have the abis and interfaces extracted. They will be stored under the `src_poc` folder and each `transaction` folder.
 
@@ -97,3 +97,14 @@ npm install .
 - The users must handle the array literals by themselves.
 - The RPC must support the `debug_traceTransaction` method.
 - The script will download ALL verified contracts of the address that appear at least once in the transaction though the POC does not need some of them.
+
+## Common errors
+- An error after `Pulling data` process.
+
+    They are common errors about the RPC pulling transaction data. The error code are commonly be `-32000` and `-32600`.
+    - Try changing the RPC that supports `debug_traceTransaction` method and the RPC must have the data of the block of the transaction, preferably an RPC from an archive node.
+
+- Function with same name and parameter types defined twice.
+
+    It is an intended behavior of the tool (for now). It happens when the functions are called multiple time. It likely happens on a reentrancy attack.
+    - The user has to merge them into one function. By merging, the user has to guess how to correctly return the right return value of each call; we have a hint of a call as a comment before the functions.
