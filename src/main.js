@@ -12,13 +12,14 @@ var ENV = {
   RPC_URL:'',
   EXPLORER_API_KEY: '',
   API_ENDPOINT: '',
-  CHAIN_ID: ''
+  CHAIN_ID: '',
+  FEATURES: {}
 }
 let main = async () => {
   let args = argHandle();
   let data;
 
-  await initEnv(args.r,args.k,args.e);
+  await initEnv(args);
   
   if(args.txHash != '') { // Pull from RPC
     if( !args.f && fs.existsSync(__dirname+`/../cache/RPC-${utils.getTxHashTmpName(args.txHash)}-packed.json`)){
@@ -55,28 +56,30 @@ let  argHandle = () => {
   parser.add_argument('-r', { help: 'RPC URL', type: 'str', default: ''});
   parser.add_argument('-k', { help: 'API Key', type: 'str', default: ''});
   parser.add_argument('-e', { help: 'API Endpoint', type: 'str', default: ''});
+  parser.add_argument('--auto-merge', { help: 'Enable auto-merge feature', action: 'store_true'});
    
   return parser.parse_args()
 }
 
-let initEnv = async (r,k,e) => {
-  ENV.RPC_URL = r==''?process.env.ETH_RPC_URL:r;
+let initEnv = async (args) => {
+  ENV.RPC_URL = args.r==''?process.env.ETH_RPC_URL:args.r;
   if(!ENV.RPC_URL || ENV.RPC_URL == ''){
     console.error('RPC_URL not found, please specify through `export ETH_RPC_URL={RPC_URL}` or `-r {RPC_URL}`')
     process.exit(1);
   }
-  ENV.EXPLORER_API_KEY = k==''?process.env.ETHERSCAN_API_KEY:k;
+  ENV.EXPLORER_API_KEY = args.k==''?process.env.ETHERSCAN_API_KEY:args.k;
   if(!ENV.EXPLORER_API_KEY || ENV.EXPLORER_API_KEY == ''){
     console.error('EXPLORER_API_KEY not found, please specify through `export ETHERSCAN_API_KEY={EXPLORER_API_KEY}` or `-k {EXPLORER_API_KEY}`')
     process.exit(1);
   }
-  ENV.API_ENDPOINT = e;
+  ENV.API_ENDPOINT = args.e;
   ENV.CHAIN_ID = await utils.getChainID(ENV.RPC_URL);
   ENV.API_ENDPOINT = getChainEndpoint(ENV.API_ENDPOINT, ENV.CHAIN_ID);
   if(!ENV.API_ENDPOINT || ENV.API_ENDPOINT == ''){
     console.error('API_ENDPOINT not found, please specify through `-e {API_ENDPOINT}`, e.g., -e https://api.etherscan.io/api')
     process.exit(1);
   }
+  ENV.FEATURES.AUTO_MERGE = {enabled: args.auto_merge, duped:{}};
   console.debug(`END POINT at ${ENV.API_ENDPOINT}`);
 }
 

@@ -9,11 +9,14 @@ var fileParams = {
   targetContract: [], // each comtains the sol code of a traced contract {name:"", code:""}
 }
 
+var FEATURES;
+
 var contractTemplate = '';
 
-function initParam(path){
+function initParam(path, _f){
   fileParams.path = path;
   contractTemplate = copyAndReplaceFile(__dirname+'/template/contract.template.sol','',{});
+  FEATURES = _f;
 }
 
 function copyAndReplaceFile(src, dst, replacer, postProcess=null){
@@ -53,6 +56,7 @@ function addressReplace(src, metadata, origin){
 }
 
 function registerContract(genContractCode, metadata, address, createdAddress, structTracker){
+  let auxParams = preRegisterContract(genContractCode, metadata, address, createdAddress, structTracker);
   let replacer = {'CONTRACT_NAME':'', 'AUX_VAR':'', 'FUNCTIONS':'', 'STRUCTS':''};
   let res = contractTemplate.slice(0);
   for(const c of genContractCode){
@@ -62,6 +66,9 @@ function registerContract(genContractCode, metadata, address, createdAddress, st
   replacer.CONTRACT_NAME = 'C_'+metadata.getNickName(address);
   for(const a of createdAddress){
     replacer.AUX_VAR += `address ${a};\n\t`
+  }
+  for(const v of auxParams.variables){
+    replacer.AUX_VAR += `${v};\n\t`
   }
 
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -285,10 +292,44 @@ async function generateTargetContractCode(analyzedCall, metadata, tAddress, mapp
           }
         }
       }
-      res.push([functionSig, functionBody.join('\n\t\t'), functionDesc.join('\n\t')])
+      let [commit,fsig,body,desc] = preCommitFunc(functionSig, functionBody.join('\n\t\t'), functionDesc.join('\n\t'), aCall, sig);
+      if(commit) res.push([fsig,body,desc]);
     }
   }
   registerContract(res, metadata, tAddress, createdAddress, structTracker)
+}
+
+function preRegisterContract(genContractCode, metadata, address, createdAddress, structTracker){
+  let auxParams = {variables:[]}
+
+  if(FEATURES.AUTO_MERGE.enabled){
+    for(const [s,v] of Object.entries(FEATURES.AUTO_MERGE.duped)){
+      let c = 0;
+      let varSig = `count_${s}`;
+      let tmp = v.body.map((e)=>{return `if(${varSig} == ${c++}){\n\t\t\t${e.replaceAll('\t\t','\t\t\t')}\n\t\t}`}).join(' else ') + `\n\t\t${varSig}++;`
+      genContractCode.push([v.head, tmp, `// This function is automatically merged`])
+
+      auxParams.variables.push(`uint256 ${varSig}`)
+    }
+  }
+  return auxParams
+}
+
+function preCommitFunc(fsig,body,desc, call, sig){
+  commit = true;
+  if(FEATURES.AUTO_MERGE.enabled){
+    if(call[sig].call.length > 1){
+      if(sig in FEATURES.AUTO_MERGE.duped){
+        FEATURES.AUTO_MERGE.duped[sig].body.push(body);
+      }else{
+        FEATURES.AUTO_MERGE.duped[sig] = {};
+        FEATURES.AUTO_MERGE.duped[sig].head = fsig;
+        FEATURES.AUTO_MERGE.duped[sig].body = [body];
+      }
+      commit = false;
+    }
+  }
+  return [commit,fsig,body,desc];
 }
 
 async function writeTestFile(dst, metadata, trace, blockData, unknownSig){

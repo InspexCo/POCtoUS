@@ -11,7 +11,7 @@ For now, the code looks really messy. We want to express the ideas first, then r
 ## Usage
 We planned for the script to be able to be executed anywhere. But for now, you need to execute the `main.js` file to run.
 ```bash
-./main.js [txHash] [-f force pulling the rpc] [-r url of the rpc] [-k API key of the block explorer] [-e (optional) endpoint of the block explorers API]
+./main.js [txHash] [-f force pulling the rpc] [-r url of the rpc] [-k API key of the block explorer] [-e (optional) endpoint of the block explorers API] [--auto-merge enable auto-merge feature]
 ```
 For example
 ```bash=
@@ -101,6 +101,11 @@ In this transaction, there are callbacks. It is good example to show the quirky 
 We assume that you have already cloned and completed the npm install step. The tool can be run anywhere, and the `POC` folder will be created in that directory.
 In this example, we will run the tool at the root of the repository path using the following command.
 
+```bash=!
+src/main.js 0xc42fe1ce2516e125a386d198703b2422aa0190b25ef6a7b0a1d3c6f5d199ffad \
+-r https://eth.llamarpc.com \
+-k {YOUR_BLOCK_EXPLORER_API_KEY}
+```
 ![image](https://github.com/InspexCo/POCtoUS/assets/97514712/1d52d72b-d916-4fc2-a384-e7bfbcc4ac13)
 
 If there are no errors, the log should appear as follows. The tool will attempt to retrieve the source code of every address called in the transaction from the respective block explorer's API endpoint. The download process might take time, and some downloads may fail. Failed contract downloads may or may not impact the generated POC file. You can rerun the tool to attempt downloading the failed contracts again.
@@ -165,6 +170,20 @@ The result of the testing is `FAIL`. Why? Because the entire process of the atta
 
 ![image](https://github.com/InspexCo/POCtoUS/assets/97514712/9d49616d-358d-4b38-b3ce-320f96dfd5f8)
 
+## Feature
+
+### Auto-merge
+
+```
+--auto-merge
+// Automatically merge the duplicated functions in imitated contracts
+```
+From the example, we have encountered a problem that there are duplicated functions in the imitated contract and the users have to manually merge them. 
+By adding the `--auto-merge` flag, the tool will automatically merge any duplicated functions into one single function in the most naive approach.
+
+![image](https://github.com/InspexCo/POCtoUS/assets/97514712/51b84a37-ef4b-4f7d-94de-572a6123d64c)
+
+
 ## Limitation
 - The functions that are being called multiple times will be generated multiple times too. The user needs to merge them into one function.
 - It can only generate a contract for one transaction at a time. The simulation of multiple transaction attacks will likely fail.
@@ -184,6 +203,7 @@ The result of the testing is `FAIL`. Why? Because the entire process of the atta
 
     It is an intended behavior of the tool (for now). It happens when the functions are called multiple time. It likely happens on a reentrancy attack.
     - The user has to merge them into one function. By merging, the user has to guess how to correctly return the right return value of each call; we have a hint of a call as a comment before the functions.
+    - In the new version, you can use the `--auto-merge` flag to let the tool automatically merge the functions.
  
 - Invalid array literal
     When the script try decoding a call that have an array datatype as an input, it will decode the array value to be an array literal value, which is mostly unacceptable by solidity compiler.

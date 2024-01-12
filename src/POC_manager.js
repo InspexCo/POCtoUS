@@ -176,7 +176,7 @@ function determineTargetContracts(trace, isRoot=true){
 
 async function initStub(data, metadata){
   let mapper = new Mapper(rootPath+`/src_poc/${utils.getTxHashTmpName(data.block.hash)}`);
-  templateManager.initParam(rootPath+'/test');
+  templateManager.initParam(rootPath+'/test', ENV.FEATURES);
   let contractCalls = {};
   utils.analyzeContractCall(data.trace, contractCalls)
   await mapper.loadSigFromMeta(metadata);
