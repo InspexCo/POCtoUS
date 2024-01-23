@@ -37,7 +37,7 @@ class Metadata{
     let allName = this.meta.allName;
     for(const a of Object.keys(_address)){
       if(_address[a].name == ''){
-        _address[a].nickname = `${_address[a].isCreated?'C':'A'}_${a.slice(0,8)}_${utils.sumAddress(a)}`;
+        _address[a].nickname = `${_address[a].isCreated?'C':'A'}_${a.slice(0,8)}_${utils.getSimpleHash(a).slice(0,4)}`;
       }else{
         _address[a].nickname = _address[a].name+ (allName[_address[a].name]>1?`_${a.slice(0,8)}`:'');
       }

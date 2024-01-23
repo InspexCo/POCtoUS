@@ -9,13 +9,13 @@ The tool will create a foundry test file of a given transaction hash. The tool w
 For now, the code looks really messy. We want to express the ideas first, then re-organize them after consider it worth doing.
 
 ## Usage
-We planned for the script to be able to be executed anywhere. But for now, you need to execute the `main.js` file to run.
+The script can be executed anywhere using `poctopus`.
 ```bash
-./main.js [txHash] [-f force pulling the rpc] [-r url of the rpc] [-k API key of the block explorer] [-e (optional) endpoint of the block explorers API] [--auto-merge enable auto-merge feature]
+poctous [txHash] [-f force pulling the rpc] [-r url of the rpc] [-k API key of the block explorer] [-e (optional) endpoint of the block explorers API] [--auto-merge enable auto-merge feature]
 ```
 For example
 ```bash=
-./main.js 0xc42fe1ce2516e125a386d198703b2422aa0190b25ef6a7b0a1d3c6f5d199ffad -r https://eth.llamarpc.com -k ABC1234567
+poctous 0xc42fe1ce2516e125a386d198703b2422aa0190b25ef6a7b0a1d3c6f5d199ffad -r https://eth.llamarpc.com -k ABC1234567
 ```
 The script will create a folder `POC` at the current directory that contains basic necessities for doing the POC.
 
@@ -84,13 +84,16 @@ POC
 
 ## Installation
 
-In this version, you need to install the dependencies and execute the `main.js` file to use.
+Users can install POCtoUS by using `npm install -g` on the repository.
+```bash
+npm install -g https://github.com/InspexCo/POCtoUS.git
+```
+Or clone the repository then install it locally.
 ```bash
 git clone https://github.com/InspexCo/POCtoUS.git
 cd poctous
-npm install
+npm install -g
 ```
-
 ## Example
 
 To demonstrate the tool, we choose a transaction that have had an attack occurred, `0xc42fe1ce2516e125a386d198703b2422aa0190b25ef6a7b0a1d3c6f5d199ffad`.
@@ -204,7 +207,3 @@ By adding the `--auto-merge` flag, the tool will automatically merge any duplica
     It is an intended behavior of the tool (for now). It happens when the functions are called multiple time. It likely happens on a reentrancy attack.
     - The user has to merge them into one function. By merging, the user has to guess how to correctly return the right return value of each call; we have a hint of a call as a comment before the functions.
     - In the new version, you can use the `--auto-merge` flag to let the tool automatically merge the functions.
- 
-- Invalid array literal
-    When the script try decoding a call that have an array datatype as an input, it will decode the array value to be an array literal value, which is mostly unacceptable by solidity compiler.
-    - The user must manually declare and construct the array variable and pass it to the call.

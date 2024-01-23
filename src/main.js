@@ -19,6 +19,8 @@ let main = async () => {
   let args = argHandle();
   let data;
 
+  utils.checkFoundry();
+  sanitizeInput(args);
   await initEnv(args);
   
   if(args.txHash != '') { // Pull from RPC
@@ -50,26 +52,26 @@ let main = async () => {
 }
 
 let  argHandle = () => {
-  const parser = new ArgumentParser();
+  const parser = new ArgumentParser({description:"A tool for generating a POC in a foundry's test file from a transaction hash."});
   parser.add_argument('txHash', { help: 'Transaction hash', nargs:'?' , default: '' });
   parser.add_argument('-f', { help: 'force pull mode', action: 'store_true' });
-  parser.add_argument('-r', { help: 'RPC URL', type: 'str', default: ''});
-  parser.add_argument('-k', { help: 'API Key', type: 'str', default: ''});
-  parser.add_argument('-e', { help: 'API Endpoint', type: 'str', default: ''});
+  parser.add_argument('-r', { help: 'Specify the RPC that will be used to pull the data', type: 'str', default: ''});
+  parser.add_argument('-k', { help: 'Specify the API Key of the respective block explorer', type: 'str', default: ''});
+  parser.add_argument('-e', { help: 'Specify the API endpoint of the block scanner (optional)', type: 'str', default: ''});
   parser.add_argument('--auto-merge', { help: 'Enable auto-merge feature', action: 'store_true'});
    
   return parser.parse_args()
 }
 
 let initEnv = async (args) => {
-  ENV.RPC_URL = args.r==''?process.env.ETH_RPC_URL:args.r;
+  ENV.RPC_URL = args.r;
   if(!ENV.RPC_URL || ENV.RPC_URL == ''){
-    console.error('RPC_URL not found, please specify through `export ETH_RPC_URL={RPC_URL}` or `-r {RPC_URL}`')
+    console.error('RPC_URL not found, please specify through `-r {RPC_URL}`')
     process.exit(1);
   }
-  ENV.EXPLORER_API_KEY = args.k==''?process.env.ETHERSCAN_API_KEY:args.k;
+  ENV.EXPLORER_API_KEY = args.k;
   if(!ENV.EXPLORER_API_KEY || ENV.EXPLORER_API_KEY == ''){
-    console.error('EXPLORER_API_KEY not found, please specify through `export ETHERSCAN_API_KEY={EXPLORER_API_KEY}` or `-k {EXPLORER_API_KEY}`')
+    console.error('EXPLORER_API_KEY not found, please specify through `-k {EXPLORER_API_KEY}`')
     process.exit(1);
   }
   ENV.API_ENDPOINT = args.e;
@@ -111,4 +113,9 @@ let createFolder = () => {
   return path;
 }
 
+let sanitizeInput = (args) => {
+  if(!/^0x([A-Fa-f0-9]{64})$/.test(args.txHash)) throw new Error('Invalid input');
+  if(/[;&|`'"]/.test(args.r)) throw new Error('Invalid input');
+  if(/[;&|`'"\\/\.]/.test(args.k)) throw new Error('Invalid input');
+}
 main();

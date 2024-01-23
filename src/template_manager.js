@@ -55,8 +55,8 @@ function addressReplace(src, metadata, origin){
   })
 }
 
-function registerContract(genContractCode, metadata, address, createdAddress, structTracker){
-  let auxParams = preRegisterContract(genContractCode, metadata, address, createdAddress, structTracker);
+function registerContract(genContractCode, metadata, address, createdAddress, structTracker, contractsNonce){
+  let auxParams = preRegisterContract(genContractCode, metadata, address, createdAddress, structTracker, contractsNonce);
   let replacer = {'CONTRACT_NAME':'', 'AUX_VAR':'', 'FUNCTIONS':'', 'STRUCTS':''};
   let res = contractTemplate.slice(0);
   for(const c of genContractCode){
@@ -64,8 +64,8 @@ function registerContract(genContractCode, metadata, address, createdAddress, st
     replacer.FUNCTIONS += tmp;
   }
   replacer.CONTRACT_NAME = 'C_'+metadata.getNickName(address);
-  for(const a of createdAddress){
-    replacer.AUX_VAR += `address ${a};\n\t`
+  for(const a in createdAddress){
+    replacer.AUX_VAR += `address ${createdAddress[a]} = Helper.calcCREATEAddress(address(this), ${contractsNonce[a]});\n\t`
   }
   for(const v of auxParams.variables){
     replacer.AUX_VAR += `${v};\n\t`
@@ -155,11 +155,11 @@ function generateStruct(params, tracker){
   return [params, null]
 }
 
-async function generateTargetContractCode(analyzedCall, metadata, tAddress, mapper, usedInterface, unknownSig){
+async function generateTargetContractCode(analyzedCall, metadata, tAddress, mapper, usedInterface, unknownSig, contractsNonce){
   console.log(`Generate contract: ${tAddress}`)
   let aCall = analyzedCall[tAddress];
   let runNumber = 0;
-  let createdAddress = [];
+  let createdAddress = {};
   let structTracker = {};
   metadata.addresses[tAddress]
   let res = [];
@@ -213,16 +213,20 @@ async function generateTargetContractCode(analyzedCall, metadata, tAddress, mapp
             name = `TMP_${decodedCall.sig}`
             let calldata = `0x${_call.in.input.slice(10)}`
             let newStruct;
-            try{
-              let gessParam = guessAbiEncodedData(calldata)[0]
-              paramType = typeof gessParam.type == typeof []?gessParam.type:[gessParam.type]
-              if(paramType[0].includes('tuple')){
-                if(paramType[0].includes('tuple()')) paramType = ['bytes memory']
-                else [paramType, newStruct] = generateStruct(paramType, structTracker)
+            if(calldata == '0x'){
+              paramType = []
+            }else{
+              try{
+                let gessParam = guessAbiEncodedData(calldata)[0]
+                paramType = typeof gessParam.type == typeof []?gessParam.type:[gessParam.type]
+                if(paramType[0].includes('tuple')){
+                  if(paramType[0].includes('tuple()')) paramType = ['bytes memory']
+                  else [paramType, newStruct] = generateStruct(paramType, structTracker)
+                }
+              }catch(e){
+                console.error('Fail: guessing calldata type')
+                paramType = ['bytes memory']
               }
-            }catch(e){
-              console.error('Fail: guessing calldata type')
-              paramType = ['bytes memory']
             }
             let sigTocalculate = newStruct?`${name}(${utils.formatTypes(utils.paramReplace(paramType,structTracker[newStruct],`(${newStruct})`))})`:`${name}(${utils.formatTypes(paramType)})`;
             let newSig = await utils.getFuncSig(sigTocalculate);
@@ -244,15 +248,19 @@ async function generateTargetContractCode(analyzedCall, metadata, tAddress, mapp
         functionDesc.push(desc);
       }
       // Generate function body
+      let arrayLiteral = {};
       for(const _out of _call.out){
         let outSig = _out.input.slice(0,10)
         let value = utils.hexToDecString(_out.value||0);
         let callTo = _out.to==tAddress?'address(this)':metadata.getVarName(_out.to);
-        if(_out.type == 'CREATE'){
+        if(_out.type.slice(0,6) == 'CREATE'){
           // CASE CREATE
           let tmpVar = metadata.getVarName(_out.to);
-          createdAddress.push(tmpVar);
-          let body = `${tmpVar} = address(new C_${callTo}${value==0?'':`{value: ${value}}`}());`
+          createdAddress[_out.to] = tmpVar;
+          let body = `${tmpVar} = address(new C_${callTo}${value==0?'':`{value: ${value}}`}());${_out.type=='CREATE2'?' // TODO: handle CREATE2':''}`
+          functionBody.push(body);
+        }else if(_out.type == 'SELFDESTRUCT'){
+          let body = `selfdestruct(payable(${callTo}));`;
           functionBody.push(body);
         }else if(outSig == '0x'){
           // CASE FALLBACK
@@ -260,25 +268,21 @@ async function generateTargetContractCode(analyzedCall, metadata, tAddress, mapp
           functionBody.push(body);
         }else{
           if(outSig in mapper.funcSig){
-            if(_out.to in mapper.funcSig[outSig]){
-              // CASE 1
-              let data = mapper.funcSig[outSig][_out.to][0];
-              usedInterface.push([outSig,data]);
-              let name = data.functionSig.slice(9, data.functionSig.indexOf('('))
-              let decodedInOut = await utils.decodeInAndOutFunction(data.functionSig, _out.input); // some input address needed to be mapped
-              let outData = utils.filterNullByte(decodedInOut[0]);
-              let body = `${decodedInOut[1]?(decodedInOut[1]||'').includes(',')?`(${utils.randonTupleParamName(decodedInOut[1])}) = `:decodedInOut[1].split(' ').length==3?`${decodedInOut[1]} = `:`${decodedInOut[1]} retr_${runNumber++} = `:''}${data.interfaceName}(${callTo}).${name}${value==0?'':`{value: ${value}}`}(${outData.join(',')});`
-              functionBody.push(body);
+            let isCertain = _out.to in mapper.funcSig[outSig];
+            let data;
+            if(isCertain){
+              data = mapper.funcSig[outSig][_out.to][0];
             }else{
-              // CASE 2
-              let data = mapper.pickOne(outSig)[0]; // Could be improved
-              usedInterface.push([outSig,data]);
-              let name = data.functionSig.slice(9, data.functionSig.indexOf('('))
-              let decodedInOut = await utils.decodeInAndOutFunction(data.functionSig, _out.input); // some input address needed to be mapped
-              let outData = utils.filterNullByte(decodedInOut[0]);
-              let body = `${decodedInOut[1]?`${decodedInOut[1]} retr_${runNumber++} = `:''}${data.interfaceName}(${callTo}).${name}${value==0?'':`{value: ${value}}`}(${outData.join(',')});`
-              functionBody.push(body + ' // Inaccurate interface name');
+              data = mapper.pickOne(outSig)[0]; // Could be improved
             }
+            usedInterface.push([outSig,data]);
+            let name = data.functionSig.slice(9, data.functionSig.indexOf('('))
+            let decodedInOut = await utils.decodeInAndOutFunction(data.functionSig, _out.input); // some input address needed to be mapped
+            let outData = utils.filterNullByte(decodedInOut[0]);
+            utils.generateTmpArray(outData, data.functionSig, arrayLiteral);
+            let lhs = `${decodedInOut[1]?(decodedInOut[1]||'').includes(',')?`(${utils.randonTupleParamName(decodedInOut[1])}) = `:decodedInOut[1].split(' ').length==3?`${decodedInOut[1]}_${utils.getRandString(4)} = `:`${decodedInOut[1].split(' ').length==2?decodedInOut[1].split(' ')[0].includes('[]')?`${decodedInOut[1].split(' ')[0]} memory`:decodedInOut[1].split(' ')[0]:decodedInOut[1]} retr_${runNumber++} = `:''}`;
+            let body = `${lhs}${data.interfaceName}(${callTo}).${name}${value==0?'':`{value: ${value}}`}(${outData.join(',')});${isCertain?'':' // Interface name may be inaccurated'}`
+            functionBody.push(body);
           }else{
             // CASE 3
             // let decodedCall = await utils.guessABI(_out);
@@ -292,14 +296,28 @@ async function generateTargetContractCode(analyzedCall, metadata, tAddress, mapp
           }
         }
       }
+      addRequiredParams(functionBody, arrayLiteral);
       let [commit,fsig,body,desc] = preCommitFunc(functionSig, functionBody.join('\n\t\t'), functionDesc.join('\n\t'), aCall, sig);
       if(commit) res.push([fsig,body,desc]);
     }
   }
-  registerContract(res, metadata, tAddress, createdAddress, structTracker)
+  registerContract(res, metadata, tAddress, createdAddress, structTracker, contractsNonce)
 }
 
-function preRegisterContract(genContractCode, metadata, address, createdAddress, structTracker){
+function addRequiredParams(functionBody, arrayLiteral){
+  let newDecalrations = [];
+  for(const [k,v] of Object.entries(arrayLiteral)){
+    let name = utils.getArrayName(k);
+    let declaration = `${v[0]} memory ${name} = new ${v[0]}(${v[1].length});\n\t\t`
+    for(const i in v[1]){
+      declaration += `${name}[${i}] = ${v[1][i]};\n\t\t`
+    }
+    newDecalrations.push(declaration);
+  }
+  if(newDecalrations.length != 0) functionBody.unshift(newDecalrations.join('\n\t\t'));
+}
+
+function preRegisterContract(genContractCode, metadata, address, createdAddress, structTracker, contractsNonce){
   let auxParams = {variables:[]}
 
   if(FEATURES.AUTO_MERGE.enabled){
@@ -311,6 +329,7 @@ function preRegisterContract(genContractCode, metadata, address, createdAddress,
 
       auxParams.variables.push(`uint256 ${varSig}`)
     }
+    FEATURES.AUTO_MERGE.duped = {};
   }
   return auxParams
 }

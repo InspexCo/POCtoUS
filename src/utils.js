@@ -1,9 +1,11 @@
-const { exec } = require("child_process"); 
+const { exec, execSync } = require("child_process"); 
 const axios = require('axios');
 const fs = require('fs');
+const crypto = require('crypto');
 
 
 async function toChecksumAddress(address) {
+  isAddress(address);
   return new Promise((resolve)=>{
     exec(`cast to-checksum ${address}`, function(error,stdout,stderr){
       resolve(stdout.trim());
@@ -24,9 +26,10 @@ async function decodeInAndOutFunction(funcSig, inputHex){
   let outType;
   if(inputSig[2])
   outType = inputSig[2].slice(1,inputSig[2].length-1)
-
+  checkSig = satitizeSpecialCharacters(inputSig[1]);
+  dataPart = satitizeSpecialCharacters(dataPart);
   return new Promise((resolve)=>{
-    exec(`cast ad --input "${inputSig[1]}" ${dataPart}`, function(error,stdout,stderr){
+    exec(`cast ad --input "${checkSig}" ${dataPart}`, function(error,stdout,stderr){
       let out = stripANSIColor(stdout.trim()).split('\n')
       resolve([out,outType])
     })
@@ -42,9 +45,13 @@ function sumAddress(addr){ // my little hash
   return res.toString(16);
 }
 
+function getSimpleHash(text){
+  return crypto.createHash('sha1').update(text).digest('hex');
+}
+
 function analyzeContractCall(root, res){
   let to = root.to;
-  let sig = root.type=='CREATE'?'CREATE':root.input.slice(0,10);
+  let sig = root.type=='CREATE'||root.type=='CREATE2'?'CREATE':root.input.slice(0,10);
   let value = hexToDecString(root.value || '0x0');
   let callOut = [];
   if('calls' in root){
@@ -73,13 +80,14 @@ function analyzeContractCall(root, res){
 
 async function guessABI(call){
   let calldata = call.input;
-  let sig = calldata.slice(0,10);
+  let sig = satitizeSpecialCharacters(calldata.slice(0,10));
   let data = await axios.get(`https://sig.eth.samczsun.com/api/v1/signatures?function=${sig}`).then(async result=>{
     let res = {name:"", type:[], param:[], out:[]};
     if(result.data.ok){
       for(const funcSig of result.data.result.function[sig]){
         let param = funcSig.name.slice(funcSig.name.indexOf('(')+1,funcSig.name.length-1).split(',');// Not work in a complex datatype
         let name = funcSig.name.slice(0, funcSig.name.indexOf('('));
+        funcSig.name = satitizeSpecialCharacters(funcSig.name);
         if(calldata.length == 10){// No parameters
           if(param[0].length == 0) {
             res.name = name;
@@ -110,6 +118,31 @@ async function guessABI(call){
   });
   return data;
 } 
+
+function getArrayName(hash){
+  return 'array_'+hash.slice(0,6);
+}
+
+function generateTmpArray(out, fSig, arrayLiteral){
+  let res = [];
+  let paramSig = /^function [^\()]+\(([^\)]*)\)/.exec(fSig);
+  if(!paramSig) return
+  paramSig = paramSig[1].split(',').map((e)=>{return e.trim()})
+  
+  for(const i in out){
+    if(out[i][0]=='['){
+      let paramContent = out[i].slice(1,-1).split(',').map((e)=>{return e.trim()});
+      let type = paramSig[i].split(' ')[0]
+      let hash = getSimpleHash(JSON.stringify([type,paramContent]))
+      if(!(hash in arrayLiteral)){
+        arrayLiteral[hash] = [type,paramContent];
+      }
+      out[i] = getArrayName(hash);
+      res.push(hash)
+    }
+  }
+  return res;
+}
 
 function getTmpInterfaceName(address) {
   return `I${address.slice(0,12)}`;
@@ -291,6 +324,7 @@ function srcFlatten(code){
   return sortChunk.join('\n');
 }
 async function getFuncSig(funcSig){
+  funcSig = satitizeSpecialCharacters(funcSig);
   return new Promise((resolve)=>{
     exec(`cast sig "${funcSig}"`, function(error,stdout,stderr){
       if(error) throw error;
@@ -300,7 +334,7 @@ async function getFuncSig(funcSig){
 }
 function getCreatedAddresses(traceRoot){
   let res = [];
-  if(traceRoot.type == 'CREATE'){
+  if(traceRoot.type == 'CREATE'||traceRoot.type == 'CREATE2'){
     res.push(traceRoot.to)
   }
   if('calls' in traceRoot){
@@ -350,8 +384,11 @@ function getRandString(len){
 
 function randonTupleParamName(params){
   let res = params.split(',').map((e)=>{
+    let t = e.trim();
+    let delim = '_'
+    if(t.split(' ').length == 1) delim = ' retr'
     let rnd = getRandString(4);
-    return e.trim()+'_'+rnd;
+    return t+delim+rnd;
   }).join(', ');
   return res
 }
@@ -360,4 +397,21 @@ function paramReplace(param, target, replacer){
   return JSON.parse(JSON.stringify(param).replace(target, replacer))
 }
 
-module.exports = {paramReplace, getRandString, randonTupleParamName, getChainID, toChecksumAddress, hexToDecString, guessABI, getTmpInterfaceName, formatInputWithType, formatTypes, toHexString, getTxHashTmpName, truncSig, srcFlatten, isJsonSrc, JSONSrcHandler,outFileDebug,inFileDebug,getCreatedAddresses, sumAddress, analyzeContractCall, decodeInAndOutFunction, filterNullByte, getFuncSig, randonTupleParamName};
+function checkFoundry(){
+  try {
+    execSync("forge --version");
+  } catch (error) {
+    console.error("Please install Foundry: https://github.com/foundry-rs/foundry");
+    process.exit(1);
+  }
+}
+
+function satitizeSpecialCharacters(input){
+  return input.replaceAll(/[;&|`'"\\/\.]/g,'');
+}
+
+function isAddress(addr){
+  if(!/^0x[0-9a-fA-F]{40}$/.test(addr)) throw new Error(`Invalid address: ${addr}`)
+}
+
+module.exports = {paramReplace, getRandString, randonTupleParamName, getChainID, toChecksumAddress, hexToDecString, guessABI, getTmpInterfaceName, formatInputWithType, formatTypes, toHexString, getTxHashTmpName, truncSig, srcFlatten, isJsonSrc, JSONSrcHandler,outFileDebug,inFileDebug,getCreatedAddresses, sumAddress, analyzeContractCall, decodeInAndOutFunction, filterNullByte, getFuncSig, randonTupleParamName, getSimpleHash, generateTmpArray, getArrayName, checkFoundry, satitizeSpecialCharacters};

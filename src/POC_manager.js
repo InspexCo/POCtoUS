@@ -116,6 +116,7 @@ async function downloadSourceCode(toLoadAddresses, meta, isForced) {
         }
       }else{
         let contractName = contractData.ContractName;
+        contractName = utils.satitizeSpecialCharacters(contractName);
         console.log(`${e}:${e==contractAddr?'':contractAddr} is ${contractName}`)
           console.log(`Flattening . . . (${contractAddr})`);
           let flattenSrc;
@@ -161,14 +162,32 @@ function loadMetadata(txHash){
   meta.tx[txHash] = {addresses:{}, srcPath:rootPath+'/src_poc/'+utils.getTxHashTmpName(txHash), loadedSrc:{}};
   return meta;
 }
-function determineTargetContracts(trace, isRoot=true){
+function determineTargetContracts(trace){
+  let raw = _determineTargetContracts(trace, true, '');
   let res = [];
-  if(trace.type == 'CREATE' || isRoot){
-    res.push(trace.to)
-    if('calls' in trace){
-      for(const c in trace.calls){
-        res.push(...determineTargetContracts(trace.calls[c], false));
-      }
+  let tmp = {};
+  for(const e of raw){
+    if(e.from in tmp){
+      tmp[e.from][e.to] = Object.keys(tmp[e.from]).length+1;
+      res.push(e.to);
+    }else{
+      tmp[e.from] = {};
+      tmp[e.from][e.to] = 1;
+      res.push(e.to)
+    }
+  }
+  return [res, tmp];
+}
+
+function _determineTargetContracts(trace, isRoot, rootAddr){
+  let res = [];
+  if(trace.type == 'CREATE' || trace.type == 'CREATE2' || isRoot){
+    if(rootAddr == '') rootAddr=trace.to;
+    if(trace.from == rootAddr || isRoot) res.push({from: trace.from, to: trace.to})
+  }
+  if('calls' in trace){
+    for(const c in trace.calls){
+      res.push(..._determineTargetContracts(trace.calls[c], false, rootAddr));
     }
   }
   return res;
@@ -180,11 +199,11 @@ async function initStub(data, metadata){
   let contractCalls = {};
   utils.analyzeContractCall(data.trace, contractCalls)
   await mapper.loadSigFromMeta(metadata);
-  let targetContracts = determineTargetContracts(data.trace);
+  let [targetContracts, contractsNonce] = determineTargetContracts(data.trace);
   let usedInterface = [];
   let unknownSig = {};
   for(const a of targetContracts){
-    await templateManager.generateTargetContractCode(contractCalls,metadata,a, mapper,usedInterface, unknownSig);
+    await templateManager.generateTargetContractCode(contractCalls,metadata,a, mapper,usedInterface, unknownSig, contractsNonce[a]||{});
   }
   await templateManager.writeTestFile(rootPath+`/test/CopiedCall(${data.block.hash.slice(0,12)}).t.sol`, metadata, data.trace, data.block, unknownSig)
   await templateManager.createConstantFile(metadata, metadata.srcPath+'/lib.constant.sol');

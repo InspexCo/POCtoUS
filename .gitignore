@@ -6,3 +6,5 @@ cache/*
 POC/
 package-lock.json
 .ds_store
+tmp*
+.npmrc
