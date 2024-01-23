@@ -1,7 +1,7 @@
 {
-  "name": "poctous",
+  "name": "@inspex/poctous",
   "version": "1.0.0",
-  "description": "",
+  "description": "[![CC BY-SA 4.0](https://img.shields.io/badge/License-CC%20BY--SA%204.0-lightgrey.svg)](http://creativecommons.org/licenses/by-sa/4.0/)",
   "main": "src/main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -9,12 +9,24 @@
   "bin": {
     "poctous": "src/main.js"
   },
-  "author": "",
+  "author": "Inspex",
   "license": "ISC",
   "dependencies": {
     "@openchainxyz/abi-guesser": "^1.0.2",
     "argparse": "^2.0.1",
     "axios": "^1.5.0",
     "axios-rate-limit": "^1.3.0"
-  }
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/InspexCo/POCtoUS.git"
+  },
+  "keywords": [
+    "POC"
+  ],
+  "bugs": {
+    "url": "https://github.com/InspexCo/POCtoUS/issues"
+  },
+  "homepage": "https://github.com/InspexCo/POCtoUS#readme"
 }
