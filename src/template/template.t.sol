@@ -13,15 +13,20 @@ import "forge-std/Test.sol";
 
 {TARGET_CONTRACTS}
 
-contract CallTest is Test {
+contract CallTest_{SHORT_TX} is Test {
     address public EOA = {EOA};
-    address public target;
+    address public target = address({TARGET});
     bool success;
     bytes32 txHash = {TX_HASH};
 
     function setUp() public {
-        target = address({TARGET});
         vm.createSelectFork('Anvil', {BLOCK_NUMBER} - 1);
+        setupLabel();
+    }
+
+    function setupLabel() internal {
+        vm.label(EOA, "Sender");
+        {LABELS}
     }
 
     function testMimicContractCall() public {

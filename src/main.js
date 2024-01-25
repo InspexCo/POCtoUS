@@ -20,7 +20,6 @@ let main = async () => {
   let data;
 
   utils.checkFoundry();
-  sanitizeInput(args);
   await initEnv(args);
   
   if(args.txHash != '') { // Pull from RPC
@@ -44,8 +43,9 @@ let main = async () => {
 
   poc.setupEnv(ENV);
   meta.populatedAddresses(data.addresses, data.trace)
-  let verifiedContract = meta.verifiedAddress;
-  await poc.downloadSourceCode(verifiedContract, meta, args.f);
+  let downloadContract = meta.verifiedAddress;
+  if(!ENV.FEATURES.MAXIMIZE.enabled) downloadContract = minimizingContractList(data.trace, downloadContract);
+  await poc.downloadSourceCode(downloadContract, meta, args.f);
   meta.saveMetadata();
   console.log('Init stub')
   await poc.initStub(data, meta);
@@ -55,12 +55,17 @@ let  argHandle = () => {
   const parser = new ArgumentParser({description:"A tool for generating a POC in a foundry's test file from a transaction hash."});
   parser.add_argument('txHash', { help: 'Transaction hash', nargs:'?' , default: '' });
   parser.add_argument('-f', { help: 'force pull mode', action: 'store_true' });
-  parser.add_argument('-r', { help: 'Specify the RPC that will be used to pull the data', type: 'str', default: ''});
-  parser.add_argument('-k', { help: 'Specify the API Key of the respective block explorer', type: 'str', default: ''});
-  parser.add_argument('-e', { help: 'Specify the API endpoint of the block scanner (optional)', type: 'str', default: ''});
+  parser.add_argument('-r', { help: 'Specify the RPC that will be used to pull the data', metavar:'RPC_URL', type: 'str', default: ''});
+  parser.add_argument('-k', { help: 'Specify the API Key of the respective block explorer', metavar:'API_KEY', type: 'str', default: ''});
+  parser.add_argument('-e', { help: 'Specify the API endpoint of the block scanner (optional)', metavar:'ENDPOINT_URL', type: 'str', default: ''});
   parser.add_argument('--auto-merge', { help: 'Enable auto-merge feature', action: 'store_true'});
-   
-  return parser.parse_args()
+  parser.add_argument('--maximize', { help: 'Enable maximize download feature', action: 'store_true'});
+  let res = parser.parse_args();
+  if(!sanitizeInput(res)){
+    parser.print_help()
+    process.exit(1);
+  }
+  return res;
 }
 
 let initEnv = async (args) => {
@@ -82,6 +87,7 @@ let initEnv = async (args) => {
     process.exit(1);
   }
   ENV.FEATURES.AUTO_MERGE = {enabled: args.auto_merge, duped:{}};
+  ENV.FEATURES.MAXIMIZE = {enabled: args.maximize};
   console.debug(`END POINT at ${ENV.API_ENDPOINT}`);
 }
 
@@ -114,8 +120,35 @@ let createFolder = () => {
 }
 
 let sanitizeInput = (args) => {
-  if(!/^0x([A-Fa-f0-9]{64})$/.test(args.txHash)) throw new Error('Invalid input');
-  if(/[;&|`'"]/.test(args.r)) throw new Error('Invalid input');
-  if(/[;&|`'"\\/\.]/.test(args.k)) throw new Error('Invalid input');
+  if(!/^0x([A-Fa-f0-9]{64})$/.test(args.txHash)) {
+    console.error('Error: Invalid tx hash')
+    return false;
+  }
+  if(/[;&|`'"]/.test(args.r)){
+    console.error('Error: Invalid RPC URL')
+    return false;
+  }
+  if(/[;&|`'"\\/\.]/.test(args.k)){
+    console.error('Error: Invalid API key')
+    return false;
+  }
+  return true
+}
+let minimizingContractList = (trace, vAddr) => {
+  let _minimizingContractList = (node, isRelated, rootAddr='') => {
+    let res = [];
+    if(isRelated) res.push(node.to)
+    if(rootAddr == '') rootAddr=node.to;
+    let flag = rootAddr==node.to || (node.from==rootAddr && node.type.slice(0,6) == 'CREATE')
+    if('calls' in node){
+      for(const c in node.calls){
+        res.push(..._minimizingContractList(node.calls[c], flag, rootAddr));
+      }
+    }
+    return res;
+  }
+  let tmp = new Set(_minimizingContractList(trace, true));
+  let res = Array.from(tmp).filter(e => vAddr.includes(e));
+  return res;
 }
 main();

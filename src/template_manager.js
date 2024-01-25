@@ -257,7 +257,7 @@ async function generateTargetContractCode(analyzedCall, metadata, tAddress, mapp
           // CASE CREATE
           let tmpVar = metadata.getVarName(_out.to);
           createdAddress[_out.to] = tmpVar;
-          let body = `${tmpVar} = address(new C_${callTo}${value==0?'':`{value: ${value}}`}());${_out.type=='CREATE2'?' // TODO: handle CREATE2':''}`
+          let body = `${tmpVar} = address(new C_${callTo}${value==0?'':`{value: ${value}}`}());`
           functionBody.push(body);
         }else if(_out.type == 'SELFDESTRUCT'){
           let body = `selfdestruct(payable(${callTo}));`;
@@ -358,13 +358,21 @@ async function writeTestFile(dst, metadata, trace, blockData, unknownSig){
   let importFiles = [];
   let value = utils.hexToDecString(trace.value||0);
   let vName = metadata.getNickName(target);
+  let labels = [];
   initialCall += `target = address(new C_${vName}${value==0?'':`{value: ${value}}`}());\n\t\t`
+  initialCall += `vm.label(target, "Main contract");\n\t\t`;
   if(trace.type != 'CREATE'){
     initialCall += `(success, ) = address(target).call${value==0?'':`{value: ${value}}`}(${utils.toHexString(trace.input)});\n`;
-    initialCall += '\t\tassertTrue(success);'
+    initialCall += '\t\tassertTrue(success);';
   }
   importFiles.push(`import "./${path.relative(fileParams.path,metadata.srcPath)}/interface.aggregate.sol";`);
   importFiles.push(`import "./${path.relative(fileParams.path,metadata.srcPath)}/lib.constant.sol";`);
+
+  for(const a in metadata.addresses){
+    let name = metadata.addresses[a].nickname;
+    if(name.slice(0,2) == 'A_') continue;
+    labels.push(`vm.label(C.${name}, "${name}");`);
+  }
 
   let postProcess = async (data)=>{
     for(const k in unknownSig){
@@ -381,7 +389,9 @@ async function writeTestFile(dst, metadata, trace, blockData, unknownSig){
     "BLOCK_NUMBER": blockData["blockNumber"],
     "TARGET_CONTRACTS": fileParams.targetContract.join('\n'),
     "IMPORT_FILES": importFiles.join('\n'),
-    "INITIAL_CALL": initialCall
+    "INITIAL_CALL": initialCall,
+    "LABELS": labels.join('\n\t\t'),
+    "SHORT_TX": utils.getTxHashTmpName(blockData["hash"])
   }, postProcess)
 }
 

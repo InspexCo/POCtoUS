@@ -11,7 +11,7 @@ For now, the code looks really messy. We want to express the ideas first, then r
 ## Usage
 The script can be executed anywhere using `poctopus`.
 ```bash
-poctous [txHash] [-f force pulling the rpc] [-r url of the rpc] [-k API key of the block explorer] [-e (optional) endpoint of the block explorers API] [--auto-merge enable auto-merge feature]
+poctous [txHash] [-f force pulling the rpc] [-r url of the rpc] [-k API key of the block explorer] [-e (optional) endpoint of the block explorers API] [--auto-merge enable auto-merge feature] [--maximize download all un-related verified contract]
 ```
 For example
 ```bash=
@@ -24,26 +24,20 @@ The script will create a folder `POC` at the current directory that contains bas
 Normally, the script will pull the data from the RPC once and cache the pulled data. On the next executions, it will use the data from the cache file. You can use the `-f` flag to force the script to pull the data from the RPC instead of using the cache.
 
 ### Run the test file
-The POC files are forge test files. They can be run with the ol' classic `forge test` command. 
+The POC files are forge test files. They can be run with the ol' classic `forge test` command. You can add `--match-contract` flag to specify the POC contract that you want to test specifically.
 
 In the test file, we specified that the test would fork from `Anvil` environment. We suggest running the `anvil` beforehand, which would be good for the testing.
 ```
 anvil -f <RPC_URL> --no-mining
 ```
 ### Required Environment
-The script requires the RPC and Etherscan API keys to operate. You can set them on the command line.
-```bash
-export ETH_RPC_URL=<your-rpc-url>
-export ETHERSCAN_API_KEY=<your-etherscan-api-key>
-```
-
-You can also specify them using the `-r` and `-k` flags when executing the script.
+The script requires the RPC and the API key of the chain's block explorer to operate. They can be specified using the `-r` and `-k` flags when executing the script.
 ```bash=
-./main.js 0xc42fe1ce2516e125a386d198703b2422aa0190b25ef6a7b0a1d3c6f5d199ffad \
+poctous 0xc42fe1ce2516e125a386d198703b2422aa0190b25ef6a7b0a1d3c6f5d199ffad \
 -r https://eth.llamarpc.com \
 -k ABC1234567
 ```
-The `-e` flag is totally optional. The default of the API endpoint will be set to `https://api.etherscan.io/api`. When you need to use the script on another chain that does not in the `Predefined endpoint chain` list, you need to specify the endpoint through the `-e` flag. 
+The `-e` flag is totally an optional. The script will check the chain from the RPC and use default block explorer from the predefined list. When you need to use the script on another chain that does not in the `Predefined endpoint chain` list, you need to specify the endpoint through the `-e` flag. 
 
 ## Predefined endpoint chain
 - Ethereum Mainnet (https://api.etherscan.io/api)
@@ -84,9 +78,9 @@ POC
 
 ## Installation
 
-Users can install POCtoUS by using `npm install -g` on the repository.
+Users can install POCtoUS from npm registry directly.
 ```bash
-npm install -g https://github.com/InspexCo/POCtoUS.git
+npm install -g @inspex/poctous
 ```
 Or clone the repository then install it locally.
 ```bash
@@ -186,13 +180,19 @@ By adding the `--auto-merge` flag, the tool will automatically merge any duplica
 
 ![image](https://github.com/InspexCo/POCtoUS/assets/97514712/51b84a37-ef4b-4f7d-94de-572a6123d64c)
 
+### Maximize
+
+```
+--maximize
+// Download all the verified contract sourcecode that appear in the transaction
+```
+Normally, the script will download the source code of the contract that being balled by the generated contracts from the script. In the case that you want to use the source code of some contracts that appear in the transaction for further analyzing the POC, you can use this flag, `--maximize`, to have the script download all source code of verified contract that appear in the transaction. 
 
 ## Limitation
-- The functions that are being called multiple times will be generated multiple times too. The user needs to merge them into one function.
+- The functions that are being called multiple times will be generated multiple times too. The user needs to merge them into one function or relying on the `auto-merge` feature of the script.
 - It can only generate a contract for one transaction at a time. The simulation of multiple transaction attacks will likely fail.
 - Some calls that we cannot decode will become low-level calls in which the parameters will not be dynamically altered.
 - A call that contains a complex data type will not likely be able to be decoded.
-- The users must handle the array literals by themselves.
 - The RPC must support the `debug_traceTransaction` method.
 - The script will download ALL verified contracts of the address that appear at least once in the transaction though the POC does not need some of them.
 
