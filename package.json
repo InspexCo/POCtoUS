@@ -1,7 +1,7 @@
 {
   "name": "@inspex/poctous",
-  "version": "1.1.0",
-  "description": "[![CC BY-SA 4.0](https://img.shields.io/badge/License-CC%20BY--SA%204.0-lightgrey.svg)](http://creativecommons.org/licenses/by-sa/4.0/)",
+  "version": "1.1.1",
+  "description": "A tool for creating a Forge project that replicates the same environment as the attacking incident during the specified transaction.",
   "main": "src/main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -10,7 +10,7 @@
     "poctous": "src/main.js"
   },
   "author": "Inspex",
-  "license": "ISC",
+  "license": "CC-BY-SA-4.0",
   "dependencies": {
     "@openchainxyz/abi-guesser": "^1.0.2",
     "argparse": "^2.0.1",
@@ -23,6 +23,13 @@
     "url": "git+https://github.com/InspexCo/POCtoUS.git"
   },
   "keywords": [
+    "ethereum",
+    "smart-contracts",
+    "blockchain",
+    "javascript",
+    "solidity",
+    "forge",
+    "foundry",
     "POC"
   ],
   "bugs": {
