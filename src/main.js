@@ -86,7 +86,7 @@ let initEnv = async (args) => {
     console.error('API_ENDPOINT not found, please specify through `-e {API_ENDPOINT}`, e.g., -e https://api.etherscan.io/api')
     process.exit(1);
   }
-  ENV.FEATURES.AUTO_MERGE = {enabled: args.auto_merge, duped:{}};
+  ENV.FEATURES.AUTO_MERGE = {enabled: args.auto_merge, duped:{}, dependentStates:{}};
   ENV.FEATURES.MAXIMIZE = {enabled: args.maximize};
   console.debug(`END POINT at ${ENV.API_ENDPOINT}`);
 }

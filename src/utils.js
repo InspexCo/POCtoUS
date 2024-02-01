@@ -29,10 +29,16 @@ async function decodeInAndOutFunction(funcSig, inputHex){
   checkSig = satitizeSpecialCharacters(inputSig[1]);
   dataPart = satitizeSpecialCharacters(dataPart);
   return new Promise((resolve)=>{
-    exec(`cast ad --input "${checkSig}" ${dataPart}`, function(error,stdout,stderr){
-      let out = stripANSIColor(stdout.trim()).split('\n')
-      resolve([out,outType])
-    })
+    if(dataPart.length == 0) resolve([[''],outType]);
+    else{
+      exec(`cast ad --input "${checkSig}" ${dataPart}`, function(error,stdout,stderr){
+        if(error){
+          console.error('There is an error about calldata decoding')
+        }
+        let out = stripANSIColor(stdout.trim()).split('\n')
+        resolve([out,outType])
+      })
+    }
   })
 }
 
@@ -60,22 +66,53 @@ function analyzeContractCall(root, res){
       return filtered;
     }))
   }
+  let call = {index: 0, order: 0, in: {input:root.input, value: value, output: root.output||'', from: root.from}, out: callOut, type: root.type}
   if(to in res){
+    call.index = res[to].orderedCall.length;
     if(sig in res[to]){
       res[to][sig].payable = res[to][sig].payable || value>0;
-      res[to][sig].call.push({in: {input:root.input, value: value, output: root.output||'', from: root.from}, out: callOut});
+      call.order = res[to][sig].call.length;
+      res[to][sig].call.push(call);
     }else{
-      res[to][sig] = {payable: value>0, call: [{ in: {input:root.input, value: value, output: root.output||'', from: root.from}, out: callOut}] };
+      res[to][sig] = {isStatic: root.type=='STATICCALL', payable: value>0, call: [call] };
     }
   }else{
-    res[to] = {};
-    res[to][sig] = {payable: value>0, call: [{ in: {input:root.input, value: value, output: root.output||'', from: root.from}, out: callOut}] };
+    res[to] = {orderedCall:[]};
+    res[to][sig] = {isStatic: root.type=='STATICCALL', payable: value>0, call: [call] };
   }
+  res[to].orderedCall.push(call);
   if('calls' in root){
     for(const c of root.calls){
       analyzeContractCall(c,res);
     }
   }
+}
+
+function analyzeDependentMergeState(contractCalls){
+  let callOrder = contractCalls.orderedCall;
+  let res = {};
+  for(const i in callOrder){
+    let c = callOrder[i];
+    let sig = truncSig(c.in.input)
+    if(c.type == 'STATICCALL' && contractCalls[sig].call.length>1){
+      for(const j of Array(parseInt(i)).keys()){
+        if(callOrder[i-j].type == 'CALL'){
+          let tmpSig = truncSig(callOrder[i-j].in.input);
+          if(tmpSig in res){
+            if(c.order != 0) res[tmpSig].unshift([sig,c.order]);
+          }else{
+            if(c.order != 0) res[tmpSig] = [[sig,c.order]]
+          }
+          break;
+        }
+      }
+    }
+  }
+  return res;
+}
+
+function getCounterStateName(fSig){
+  return `count_${fSig}`;
 }
 
 async function guessABI(call){
@@ -95,7 +132,7 @@ async function guessABI(call){
           }
         }else{
           let decodedparam = await new Promise((resolve)=>{
-            exec(`cast --abi-decode --input "${funcSig.name}" "${calldata}"`, function(error,stdout,stderr){
+            exec(`cast calldata-decode "${funcSig.name}" "${calldata}"`, function(error,stdout,stderr){
               resolve(stripANSIColor(stdout.trim()).split('\n'));
             })
           });
@@ -148,14 +185,14 @@ function getTmpInterfaceName(address) {
   return `I${address.slice(0,12)}`;
 }
 
-function formatTypes(types, tmpParam=false){
+function formatTypes(types, tmpParam=false, isMemorySuppress=false){
   const memoryType = ["string", "bytes"];
   let paramCount = 0;
   let res = [];
-
-  for(const t of types){
+  for(let t of types){
+    if(isMemorySuppress) t = t.replace(/ ?memory/, '');
     if(memoryType.includes(t) || t.includes("[]")){
-      res.push(`${t} memory`+(tmpParam?` param${paramCount++}`:''));
+      res.push(`${t}${isMemorySuppress?'':' memory'}`+(tmpParam?` param${paramCount++}`:''));
     }else{
       res.push(t+(tmpParam?` param${paramCount++}`:''));
     }
@@ -346,7 +383,7 @@ function getCreatedAddresses(traceRoot){
 }
 function filterNullByte(src){
   return src.map((e)=>{
-    return e=='0x'?`""`:e;
+    return e=='0x'?`""`:e.slice(0,2)=='0x'&&e.length!=42?toHexString(e):e;
   })
 }
 function outFileDebug(data, id=''){
@@ -414,4 +451,4 @@ function isAddress(addr){
   if(!/^0x[0-9a-fA-F]{40}$/.test(addr)) throw new Error(`Invalid address: ${addr}`)
 }
 
-module.exports = {paramReplace, getRandString, randonTupleParamName, getChainID, toChecksumAddress, hexToDecString, guessABI, getTmpInterfaceName, formatInputWithType, formatTypes, toHexString, getTxHashTmpName, truncSig, srcFlatten, isJsonSrc, JSONSrcHandler,outFileDebug,inFileDebug,getCreatedAddresses, sumAddress, analyzeContractCall, decodeInAndOutFunction, filterNullByte, getFuncSig, randonTupleParamName, getSimpleHash, generateTmpArray, getArrayName, checkFoundry, satitizeSpecialCharacters};
+module.exports = {paramReplace, getRandString, randonTupleParamName, getChainID, toChecksumAddress, hexToDecString, guessABI, getTmpInterfaceName, formatInputWithType, formatTypes, toHexString, getTxHashTmpName, truncSig, srcFlatten, isJsonSrc, JSONSrcHandler,outFileDebug,inFileDebug,getCreatedAddresses, sumAddress, analyzeContractCall, decodeInAndOutFunction, filterNullByte, getFuncSig, randonTupleParamName, getSimpleHash, generateTmpArray, getArrayName, checkFoundry, satitizeSpecialCharacters, analyzeDependentMergeState, getCounterStateName};

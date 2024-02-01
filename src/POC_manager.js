@@ -163,7 +163,7 @@ function loadMetadata(txHash){
   return meta;
 }
 function determineTargetContracts(trace){
-  let raw = _determineTargetContracts(trace, true, '');
+  let raw = _determineTargetContracts(trace, true, []);
   let res = [];
   let tmp = {};
   for(const e of raw){
@@ -181,9 +181,11 @@ function determineTargetContracts(trace){
 
 function _determineTargetContracts(trace, isRoot, rootAddr){
   let res = [];
-  if(trace.type == 'CREATE' || trace.type == 'CREATE2' || isRoot){
-    if(rootAddr == '') rootAddr=trace.to;
-    if(trace.from == rootAddr || isRoot) res.push({from: trace.from, to: trace.to})
+  if(trace.type.slice(0,6) == 'CREATE' || isRoot){
+    if(rootAddr.includes(trace.from) || isRoot){
+      res.push({from: trace.from, to: trace.to})
+      rootAddr.push(trace.to);
+    }
   }
   if('calls' in trace){
     for(const c in trace.calls){

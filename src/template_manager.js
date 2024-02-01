@@ -162,8 +162,10 @@ async function generateTargetContractCode(analyzedCall, metadata, tAddress, mapp
   let createdAddress = {};
   let structTracker = {};
   metadata.addresses[tAddress]
+  if(FEATURES.AUTO_MERGE.enabled) FEATURES.AUTO_MERGE.dependentStates = utils.analyzeDependentMergeState(aCall);
   let res = [];
   for(const sig in aCall){
+    if(sig == 'orderedCall') continue;
     for(const _call of aCall[sig].call){
       // Generate function signature
       let functionSig;
@@ -241,10 +243,10 @@ async function generateTargetContractCode(analyzedCall, metadata, tAddress, mapp
           hasReturn = decodedCall.out.length!=0;
         }
 
-        if(aCall[sig].call.length > 1)
+        if(aCall[sig].call.length > 1 && !FEATURES.AUTO_MERGE.enabled)
           functionDesc.push('// This function is duplicated. Please merge them manually, for now.');
         if(hasReturn)
-          functionBody.push(`retr = abi.decode(${utils.toHexString(_call.in.output)}, (${utils.formatTypes(decodedCall.out)}));`)
+          functionBody.push(`retr = abi.decode(${utils.toHexString(_call.in.output)}, (${utils.formatTypes(decodedCall.out, false, true)}));`)
         functionDesc.push(desc);
       }
       // Generate function body
@@ -324,7 +326,8 @@ function preRegisterContract(genContractCode, metadata, address, createdAddress,
     for(const [s,v] of Object.entries(FEATURES.AUTO_MERGE.duped)){
       let c = 0;
       let varSig = `count_${s}`;
-      let tmp = v.body.map((e)=>{return `if(${varSig} == ${c++}){\n\t\t\t${e.replaceAll('\t\t','\t\t\t')}\n\t\t}`}).join(' else ') + `\n\t\t${varSig}++;`
+      let varUpdateChunk = v.sideCar + (v.isStatic?'':`\n\t\t++${varSig};`);
+      let tmp = v.body.map((e)=>{return `if(${varSig} == ${c++}){\n\t\t\t${e.replaceAll('\t\t','\t\t\t')}\n\t\t}`}).join(' else ') + varUpdateChunk;
       genContractCode.push([v.head, tmp, `// This function is automatically merged`])
 
       auxParams.variables.push(`uint256 ${varSig}`)
@@ -337,15 +340,26 @@ function preRegisterContract(genContractCode, metadata, address, createdAddress,
 function preCommitFunc(fsig,body,desc, call, sig){
   commit = true;
   if(FEATURES.AUTO_MERGE.enabled){
+    let stateUpdateChunk = [];
+    if(sig in FEATURES.AUTO_MERGE.dependentStates){
+      stateUpdateChunk = FEATURES.AUTO_MERGE.dependentStates[sig].map((e)=>{
+        let varName = utils.getCounterStateName(e[0])
+        return `if(${varName}==${e[1]-1}) ++${varName};`
+      })
+    }
     if(call[sig].call.length > 1){
       if(sig in FEATURES.AUTO_MERGE.duped){
-        FEATURES.AUTO_MERGE.duped[sig].body.push(body);
+        FEATURES.AUTO_MERGE.duped[sig].body.push(desc+'\n\t\t'+body);
       }else{
         FEATURES.AUTO_MERGE.duped[sig] = {};
         FEATURES.AUTO_MERGE.duped[sig].head = fsig;
-        FEATURES.AUTO_MERGE.duped[sig].body = [body];
+        FEATURES.AUTO_MERGE.duped[sig].body = [desc+'\n\t\t'+body];
+        FEATURES.AUTO_MERGE.duped[sig].isStatic = call[sig].isStatic;
+        FEATURES.AUTO_MERGE.duped[sig].sideCar = '\n\t\t' + stateUpdateChunk.join('\n\t\t');
       }
       commit = false;
+    }else{
+      body = stateUpdateChunk.join('\n\t\t') + (stateUpdateChunk.length==0?'':'\n\t\t') + body;
     }
   }
   return [commit,fsig,body,desc];
